@@ -38,8 +38,7 @@ builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
     {
-        // Return ProblemDetails instead of ValidationProblemDetails for model validation errors
-        // This ensures consistent 400 response shape across all error types
+        // Return ProblemDetails for all validation errors
         options.InvalidModelStateResponseFactory = context =>
         {
             var problemDetails = new ProblemDetails
@@ -50,7 +49,6 @@ builder.Services.AddControllers()
                 Instance = context.HttpContext.Request.Path
             };
 
-            // Preserve field-level errors in Extensions
             var errors = context.ModelState
                 .Where(e => e.Value?.Errors.Count > 0)
                 .ToDictionary(

@@ -82,7 +82,7 @@ public class ProductRepository : IProductRepository
         var parameters = new List<SqlParameter>();
         var whereConditions = new List<string> { "p.IsActive = 1" };
 
-        // Search term filter (case-insensitive using SQL LOWER for consistent locale handling)
+        // Case-insensitive search using SQL LOWER
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
         {
             var terms = request.SearchTerm.Split(' ', StringSplitOptions.RemoveEmptyEntries);

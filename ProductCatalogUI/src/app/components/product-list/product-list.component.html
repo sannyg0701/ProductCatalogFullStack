@@ -1,0 +1,87 @@
+<h1>Products</h1>
+
+<p style="margin-bottom: 1.5rem;">
+  <a routerLink="/products/new" class="btn-primary">+ Add Product</a>
+</p>
+
+<!-- Search/Filter Form -->
+<fieldset style="margin-bottom: 1rem; padding: 1rem;">
+  <legend>Search &amp; Filter</legend>
+
+  <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+    <div>
+      <label for="searchTerm">Search</label><br>
+      <input id="searchTerm" type="text" [ngModel]="searchTerm" (ngModelChange)="onSearchTermChange($event)" placeholder="Name or description">
+    </div>
+
+    <div>
+      <label for="category">Category</label><br>
+      <select id="category" [(ngModel)]="selectedCategoryId">
+        <option [ngValue]="null">All Categories</option>
+        <option *ngFor="let cat of categories" [ngValue]="cat.id">{{ cat.name }}</option>
+      </select>
+    </div>
+
+    <div>
+      <label for="minPrice">Min Price</label><br>
+      <input id="minPrice" type="number" [(ngModel)]="minPrice" style="width: 80px;" min="0">
+    </div>
+
+    <div>
+      <label for="maxPrice">Max Price</label><br>
+      <input id="maxPrice" type="number" [(ngModel)]="maxPrice" style="width: 80px;" min="0">
+    </div>
+
+    <div>
+      <label>
+        <input type="checkbox" [(ngModel)]="inStockOnly"> In Stock Only
+      </label>
+    </div>
+
+    <div>
+      <button (click)="pageNumber = 1; search()">Search</button>
+      <button (click)="clearFilters()" style="margin-left: 0.5rem;">Clear</button>
+    </div>
+  </div>
+</fieldset>
+
+<div *ngIf="isLoading">Loading products...</div>
+
+<div *ngIf="errorMessage" style="color: red;">
+  {{ errorMessage }}
+</div>
+
+<div *ngIf="!isLoading && !errorMessage">
+  <p>Showing {{ products.length }} of {{ totalCount }} products</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th (click)="sort('name')" style="cursor: pointer;">Name{{ getSortIndicator('name') }}</th>
+        <th (click)="sort('price')" style="cursor: pointer;">Price{{ getSortIndicator('price') }}</th>
+        <th>Category</th>
+        <th (click)="sort('stockquantity')" style="cursor: pointer;">Stock{{ getSortIndicator('stockquantity') }}</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let product of products">
+        <td><a [routerLink]="['/products', product.id]">{{ product.name }}</a></td>
+        <td>{{ product.price | currency }}</td>
+        <td>{{ product.categoryName }}</td>
+        <td [style.color]="product.stockQuantity === 0 ? 'red' : 'inherit'">{{ product.stockQuantity }}</td>
+        <td>
+          <a [routerLink]="['/products', product.id, 'edit']" class="btn-small">Edit</a>
+          <button (click)="deleteProduct(product)" class="btn-danger">Delete</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Pagination -->
+  <div *ngIf="totalPages > 1" style="margin-top: 1rem;">
+    <button (click)="goToPage(pageNumber - 1)" [disabled]="pageNumber === 1">Previous</button>
+    <span style="margin: 0 1rem;">Page {{ pageNumber }} of {{ totalPages }}</span>
+    <button (click)="goToPage(pageNumber + 1)" [disabled]="pageNumber === totalPages">Next</button>
+  </div>
+</div>

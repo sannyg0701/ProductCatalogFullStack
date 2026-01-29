@@ -1,0 +1,54 @@
+<p style="margin-bottom: 1rem;"><a routerLink="/">← Back to Products</a></p>
+
+<div *ngIf="isLoading" class="loading">Loading product...</div>
+
+<div *ngIf="errorMessage" class="error-message">
+  {{ errorMessage }}
+</div>
+
+<div *ngIf="product" class="card">
+  <h1>{{ product.name }}</h1>
+
+  <div class="details-grid">
+    <div class="detail-item">
+      <span class="detail-label">Price</span>
+      <span class="detail-value price">{{ product.price | currency }}</span>
+    </div>
+
+    <div class="detail-item">
+      <span class="detail-label">Category</span>
+      <span class="detail-value">{{ product.categoryName }}</span>
+    </div>
+
+    <div class="detail-item">
+      <span class="detail-label">Stock Quantity</span>
+      <span class="detail-value" [class.out-of-stock]="product.stockQuantity === 0">
+        {{ product.stockQuantity }}
+        <span *ngIf="product.stockQuantity === 0">(Out of Stock)</span>
+      </span>
+    </div>
+
+    <div class="detail-item">
+      <span class="detail-label">Status</span>
+      <span class="detail-value">
+        <span class="status-badge" [class.active]="product.isActive">
+          {{ product.isActive ? 'Active' : 'Inactive' }}
+        </span>
+      </span>
+    </div>
+
+    <div class="detail-item full-width">
+      <span class="detail-label">Description</span>
+      <span class="detail-value">{{ product.description || 'No description available' }}</span>
+    </div>
+
+    <div class="detail-item">
+      <span class="detail-label">Created Date</span>
+      <span class="detail-value">{{ product.createdDate | date:'medium' }}</span>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <a [routerLink]="['/products', product.id, 'edit']" class="btn-primary">Edit Product</a>
+  </div>
+</div>

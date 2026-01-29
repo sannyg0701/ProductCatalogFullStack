@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: productcatalog-api
+  namespace: productcatalog
+  labels:
+    app: productcatalog-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: productcatalog-api
+  template:
+    metadata:
+      labels:
+        app: productcatalog-api
+    spec:
+      containers:
+        - name: api
+          image: productcatalog-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: productcatalog-config
+            - secretRef:
+                name: productcatalog-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3

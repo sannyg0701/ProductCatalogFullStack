@@ -16,7 +16,7 @@
 
     <div>
       <label for="category">Category</label><br>
-      <select id="category" [(ngModel)]="selectedCategoryId">
+      <select id="category" [ngModel]="selectedCategoryId" (ngModelChange)="onCategoryChange($event)">
         <option [ngValue]="null">All Categories</option>
         <option *ngFor="let cat of categories" [ngValue]="cat.id">{{ cat.name }}</option>
       </select>
@@ -24,23 +24,28 @@
 
     <div>
       <label for="minPrice">Min Price</label><br>
-      <input id="minPrice" type="number" [(ngModel)]="minPrice" style="width: 80px;" min="0">
+      <span style="display: inline-flex; align-items: center;">
+        <span style="margin-right: 2px;">$</span>
+        <input id="minPrice" type="text" [ngModel]="minPriceInput" (ngModelChange)="onMinPriceChange($event)" placeholder="0.00" style="width: 70px;">
+      </span>
     </div>
 
     <div>
       <label for="maxPrice">Max Price</label><br>
-      <input id="maxPrice" type="number" [(ngModel)]="maxPrice" style="width: 80px;" min="0">
+      <span style="display: inline-flex; align-items: center;">
+        <span style="margin-right: 2px;">$</span>
+        <input id="maxPrice" type="text" [ngModel]="maxPriceInput" (ngModelChange)="onMaxPriceChange($event)" placeholder="0.00" style="width: 70px;">
+      </span>
     </div>
 
     <div>
       <label>
-        <input type="checkbox" [(ngModel)]="inStockOnly"> In Stock Only
+        <input type="checkbox" [ngModel]="inStockOnly" (ngModelChange)="onInStockChange($event)"> In Stock Only
       </label>
     </div>
 
     <div>
-      <button (click)="pageNumber = 1; search()">Search</button>
-      <button (click)="clearFilters()" style="margin-left: 0.5rem;">Clear</button>
+      <button (click)="clearFilters()">Clear</button>
     </div>
   </div>
 </fieldset>

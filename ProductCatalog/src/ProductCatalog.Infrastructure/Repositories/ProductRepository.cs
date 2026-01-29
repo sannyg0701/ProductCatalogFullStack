@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using ProductCatalog.Core.DTOs.Requests;
 using ProductCatalog.Core.DTOs.Responses;
@@ -67,44 +68,134 @@ public class ProductRepository : IProductRepository
             .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Searches products using a single SQL query with CTEs and UNION ALL.
+    /// Returns correct TotalCount even when the requested page is empty (beyond last page).
+    /// This satisfies the "efficient single-query implementation" requirement.
+    /// </summary>
     public async Task<PagedResult<ProductResponse>> SearchAsync(
         ProductSearchRequest request,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var query = _context.Products
-            .Where(p => p.IsActive)
-            .AsQueryable();
+        var parameters = new List<SqlParameter>();
+        var whereConditions = new List<string> { "p.IsActive = 1" };
 
-        // Apply filters
-        query = ApplyFilters(query, request);
-
-        // Get total count before pagination
-        var totalCount = await query.CountAsync(cancellationToken).ConfigureAwait(false);
-
-        // Apply sorting
-        query = ApplySorting(query, request.SortBy, request.SortOrder);
-
-        // Apply pagination and projection
-        var items = await query
-            .Skip((request.PageNumber - 1) * request.PageSize)
-            .Take(request.PageSize)
-            .Select(p => new ProductResponse
+        // Search term filter (SQL Server collation is case-insensitive)
+        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
+        {
+            var terms = request.SearchTerm.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            for (var i = 0; i < terms.Length; i++)
             {
-                Id = p.Id,
-                Name = p.Name,
-                Description = p.Description,
-                Price = p.Price,
-                CategoryId = p.CategoryId,
-                CategoryName = p.Category.Name,
-                StockQuantity = p.StockQuantity,
-                CreatedDate = p.CreatedDate,
-                IsActive = p.IsActive
-            })
-            .AsNoTracking()
+                var paramName = $"@searchTerm{i}";
+                var escapedTerm = EscapeLikeTerm(terms[i]);
+                parameters.Add(new SqlParameter(paramName, $"%{escapedTerm}%"));
+                whereConditions.Add($"(p.Name LIKE {paramName} ESCAPE '\\' OR p.Description LIKE {paramName} ESCAPE '\\')");
+            }
+        }
+
+        // Category filter
+        if (request.CategoryId.HasValue)
+        {
+            parameters.Add(new SqlParameter("@categoryId", request.CategoryId.Value));
+            whereConditions.Add("p.CategoryId = @categoryId");
+        }
+
+        // Price range filters
+        if (request.MinPrice.HasValue)
+        {
+            parameters.Add(new SqlParameter("@minPrice", request.MinPrice.Value));
+            whereConditions.Add("p.Price >= @minPrice");
+        }
+
+        if (request.MaxPrice.HasValue)
+        {
+            parameters.Add(new SqlParameter("@maxPrice", request.MaxPrice.Value));
+            whereConditions.Add("p.Price <= @maxPrice");
+        }
+
+        // In stock filter
+        if (request.InStock.HasValue)
+        {
+            whereConditions.Add(request.InStock.Value ? "p.StockQuantity > 0" : "p.StockQuantity = 0");
+        }
+
+        // Build ORDER BY clause (whitelist approach to prevent SQL injection)
+        // Uses fp alias to match the PagedProducts CTE scope
+        var orderByClause = (request.SortBy?.ToLowerInvariant(), request.SortOrder?.ToLowerInvariant()) switch
+        {
+            ("price", "desc") => "fp.Price DESC, fp.Id ASC",
+            ("price", _) => "fp.Price ASC, fp.Id ASC",
+            ("createddate", "desc") => "fp.CreatedDate DESC, fp.Id ASC",
+            ("createddate", _) => "fp.CreatedDate ASC, fp.Id ASC",
+            ("stockquantity", "desc") => "fp.StockQuantity DESC, fp.Id ASC",
+            ("stockquantity", _) => "fp.StockQuantity ASC, fp.Id ASC",
+            ("name", "desc") => "fp.Name DESC, fp.Id ASC",
+            _ => "fp.Name ASC, fp.Id ASC"
+        };
+
+        // Pagination parameters
+        var offset = (request.PageNumber - 1) * request.PageSize;
+        parameters.Add(new SqlParameter("@offset", offset));
+        parameters.Add(new SqlParameter("@pageSize", request.PageSize));
+
+        var whereClause = string.Join(" AND ", whereConditions);
+
+        // Single query using CTEs to ensure TotalCount is correct even when page is empty.
+        // Uses UNION ALL with a count-only row (IsCountRow=1) when no data rows exist.
+        var sql = $@"
+            WITH FilteredProducts AS (
+                SELECT
+                    p.Id, p.Name, p.Description, p.Price, p.CategoryId,
+                    c.Name AS CategoryName, p.StockQuantity, p.CreatedDate, p.IsActive
+                FROM Products p
+                INNER JOIN Categories c ON p.CategoryId = c.Id
+                WHERE {whereClause}
+            ),
+            TotalCount AS (
+                SELECT COUNT(*) AS Cnt FROM FilteredProducts
+            ),
+            PagedProducts AS (
+                SELECT
+                    fp.Id, fp.Name, fp.Description, fp.Price, fp.CategoryId, fp.CategoryName,
+                    fp.StockQuantity, fp.CreatedDate, fp.IsActive,
+                    (SELECT Cnt FROM TotalCount) AS TotalCount,
+                    CAST(0 AS BIT) AS IsCountRow
+                FROM FilteredProducts fp
+                ORDER BY {orderByClause}
+                OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+            )
+            SELECT * FROM PagedProducts
+            UNION ALL
+            SELECT 0, '', NULL, 0, 0, '', 0, GETUTCDATE(), CAST(0 AS BIT),
+                   (SELECT Cnt FROM TotalCount), CAST(1 AS BIT)
+            WHERE (SELECT COUNT(*) FROM PagedProducts) = 0";
+
+        // Execute raw SQL and map to internal DTO
+        var results = await _context.Database
+            .SqlQueryRaw<SearchResultRow>(sql, parameters.ToArray())
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        // TotalCount comes from any row (data rows or count-only row)
+        var totalCount = results.FirstOrDefault()?.TotalCount ?? 0;
+
+        // Filter out the count-only row when building items
+        var items = results
+            .Where(r => !r.IsCountRow)
+            .Select(r => new ProductResponse
+            {
+                Id = r.Id,
+                Name = r.Name,
+                Description = r.Description,
+                Price = r.Price,
+                CategoryId = r.CategoryId,
+                CategoryName = r.CategoryName,
+                StockQuantity = r.StockQuantity,
+                CreatedDate = r.CreatedDate,
+                IsActive = r.IsActive
+            }).ToList();
 
         return new PagedResult<ProductResponse>
         {
@@ -113,6 +204,34 @@ public class ProductRepository : IProductRepository
             PageNumber = request.PageNumber,
             PageSize = request.PageSize
         };
+    }
+
+    private static string EscapeLikeTerm(string term)
+    {
+        return term
+            .Replace(@"\", @"\\", StringComparison.Ordinal)
+            .Replace("%", @"\%", StringComparison.Ordinal)
+            .Replace("_", @"\_", StringComparison.Ordinal)
+            .Replace("[", @"\[", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Internal DTO for raw SQL search results including total count.
+    /// IsCountRow indicates a dummy row used only to return TotalCount when the page is empty.
+    /// </summary>
+    private sealed class SearchResultRow
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public decimal Price { get; set; }
+        public int CategoryId { get; set; }
+        public string CategoryName { get; set; } = string.Empty;
+        public int StockQuantity { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public bool IsActive { get; set; }
+        public int TotalCount { get; set; }
+        public bool IsCountRow { get; set; }
     }
 
     public async Task<Product> AddAsync(Product product, CancellationToken cancellationToken = default)
@@ -140,60 +259,4 @@ public class ProductRepository : IProductRepository
             .ConfigureAwait(false);
     }
 
-    private static IQueryable<Product> ApplyFilters(IQueryable<Product> query, ProductSearchRequest request)
-    {
-        // Search term filter (case-insensitive contains across name and description)
-        if (!string.IsNullOrWhiteSpace(request.SearchTerm))
-        {
-            var searchTerms = request.SearchTerm.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var term in searchTerms)
-            {
-                var lowerTerm = term.ToLowerInvariant();
-                query = query.Where(p =>
-                    p.Name.ToLower().Contains(lowerTerm) ||
-                    (p.Description != null && p.Description.ToLower().Contains(lowerTerm)));
-            }
-        }
-
-        // Category filter
-        if (request.CategoryId.HasValue)
-        {
-            query = query.Where(p => p.CategoryId == request.CategoryId.Value);
-        }
-
-        // Price range filters
-        if (request.MinPrice.HasValue)
-        {
-            query = query.Where(p => p.Price >= request.MinPrice.Value);
-        }
-
-        if (request.MaxPrice.HasValue)
-        {
-            query = query.Where(p => p.Price <= request.MaxPrice.Value);
-        }
-
-        // In stock filter
-        if (request.InStock.HasValue)
-        {
-            query = request.InStock.Value
-                ? query.Where(p => p.StockQuantity > 0)
-                : query.Where(p => p.StockQuantity == 0);
-        }
-
-        return query;
-    }
-
-    private static IQueryable<Product> ApplySorting(IQueryable<Product> query, string? sortBy, string? sortOrder)
-    {
-        var isDescending = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
-
-        return sortBy?.ToLowerInvariant() switch
-        {
-            "name" => isDescending ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
-            "price" => isDescending ? query.OrderByDescending(p => p.Price) : query.OrderBy(p => p.Price),
-            "createddate" => isDescending ? query.OrderByDescending(p => p.CreatedDate) : query.OrderBy(p => p.CreatedDate),
-            "stockquantity" => isDescending ? query.OrderByDescending(p => p.StockQuantity) : query.OrderBy(p => p.StockQuantity),
-            _ => query.OrderBy(p => p.Name) // Default sorting
-        };
-    }
 }

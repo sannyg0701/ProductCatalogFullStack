@@ -65,9 +65,10 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
-// Seed database
-using (var scope = app.Services.CreateScope())
+// Seed database (Development only to avoid startup issues in production)
+if (app.Environment.IsDevelopment())
 {
+    using var scope = app.Services.CreateScope();
     var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 

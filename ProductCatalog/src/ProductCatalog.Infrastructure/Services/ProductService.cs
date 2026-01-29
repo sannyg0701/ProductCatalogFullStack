@@ -53,14 +53,14 @@ public class ProductService : IProductService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Validate category exists
-        var categoryExists = await _categoryRepository.ExistsAsync(request.CategoryId, cancellationToken)
+        // Fetch category (validates existence, active status, and gets name for response)
+        var category = await _categoryRepository.GetByIdAsync(request.CategoryId, cancellationToken)
             .ConfigureAwait(false);
 
-        if (!categoryExists)
+        if (category is null || !category.IsActive)
         {
-            _logger.LogWarning("Attempted to create product with non-existent category {categoryId}.", request.CategoryId);
-            throw new InvalidOperationException($"Category with ID {request.CategoryId} does not exist.");
+            _logger.LogWarning("Attempted to create product with non-existent or inactive category {categoryId}.", request.CategoryId);
+            throw new InvalidOperationException($"Category with ID {request.CategoryId} does not exist or is inactive.");
         }
 
         var product = new Product
@@ -77,11 +77,19 @@ public class ProductService : IProductService
         var createdProduct = await _productRepository.AddAsync(product, cancellationToken).ConfigureAwait(false);
         _logger.LogDebug("Created product with id {productId}.", createdProduct.Id);
 
-        // Fetch the full response with category name
-        var response = await _productRepository.GetByIdAsync(createdProduct.Id, cancellationToken)
-            .ConfigureAwait(false);
-
-        return response!;
+        // Build response directly (avoids re-fetch and null-forgiving operator)
+        return new ProductResponse
+        {
+            Id = createdProduct.Id,
+            Name = createdProduct.Name,
+            Description = createdProduct.Description,
+            Price = createdProduct.Price,
+            CategoryId = createdProduct.CategoryId,
+            CategoryName = category.Name,
+            StockQuantity = createdProduct.StockQuantity,
+            CreatedDate = createdProduct.CreatedDate,
+            IsActive = createdProduct.IsActive
+        };
     }
 
     public async Task<ProductResponse?> UpdateAsync(
@@ -99,17 +107,14 @@ public class ProductService : IProductService
             return null;
         }
 
-        // Validate category exists if changing category
-        if (product.CategoryId != request.CategoryId)
-        {
-            var categoryExists = await _categoryRepository.ExistsAsync(request.CategoryId, cancellationToken)
-                .ConfigureAwait(false);
+        // Validate category exists and is active (ExistsAsync filters by IsActive)
+        var categoryExists = await _categoryRepository.ExistsAsync(request.CategoryId, cancellationToken)
+            .ConfigureAwait(false);
 
-            if (!categoryExists)
-            {
-                _logger.LogWarning("Attempted to update product {productId} with non-existent category {categoryId}.", id, request.CategoryId);
-                throw new InvalidOperationException($"Category with ID {request.CategoryId} does not exist.");
-            }
+        if (!categoryExists)
+        {
+            _logger.LogWarning("Attempted to update product {productId} with non-existent or inactive category {categoryId}.", id, request.CategoryId);
+            throw new InvalidOperationException($"Category with ID {request.CategoryId} does not exist or is inactive.");
         }
 
         product.Name = request.Name;

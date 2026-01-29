@@ -20,6 +20,8 @@ export class ProductListComponent implements OnInit, OnDestroy {
   private readonly categoryService = inject(CategoryService);
   private readonly destroy$ = new Subject<void>();
   private readonly searchTerms$ = new Subject<string>();
+  private readonly minPrice$ = new Subject<string>();
+  private readonly maxPrice$ = new Subject<string>();
 
   products: Product[] = [];
   categories: Category[] = [];
@@ -29,6 +31,8 @@ export class ProductListComponent implements OnInit, OnDestroy {
   // Search filters
   searchTerm = '';
   selectedCategoryId: number | null = null;
+  minPriceInput = '';
+  maxPriceInput = '';
   minPrice: number | null = null;
   maxPrice: number | null = null;
   inStockOnly = false;
@@ -65,11 +69,63 @@ export class ProductListComponent implements OnInit, OnDestroy {
         this.pageNumber = 1;
         this.search();
       });
+
+    this.minPrice$
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        this.pageNumber = 1;
+        this.search();
+      });
+
+    this.maxPrice$
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        this.pageNumber = 1;
+        this.search();
+      });
   }
 
   onSearchTermChange(term: string): void {
     this.searchTerm = term;
     this.searchTerms$.next(term);
+  }
+
+  onMinPriceChange(value: string): void {
+    this.minPriceInput = value;
+    this.minPrice = this.parsePriceInput(value);
+    this.minPrice$.next(value);
+  }
+
+  onMaxPriceChange(value: string): void {
+    this.maxPriceInput = value;
+    this.maxPrice = this.parsePriceInput(value);
+    this.maxPrice$.next(value);
+  }
+
+  private parsePriceInput(value: string): number | null {
+    if (!value || value.trim() === '') return null;
+    const parsed = parseFloat(value);
+    return isNaN(parsed) || parsed < 0 ? null : parsed;
+  }
+
+  onInStockChange(value: boolean): void {
+    this.inStockOnly = value;
+    this.pageNumber = 1;
+    this.search();
+  }
+
+  onCategoryChange(categoryId: number | null): void {
+    this.selectedCategoryId = categoryId;
+    this.pageNumber = 1;
+    this.search();
   }
 
   private loadCategories(): void {
@@ -113,6 +169,8 @@ export class ProductListComponent implements OnInit, OnDestroy {
   clearFilters(): void {
     this.searchTerm = '';
     this.selectedCategoryId = null;
+    this.minPriceInput = '';
+    this.maxPriceInput = '';
     this.minPrice = null;
     this.maxPrice = null;
     this.inStockOnly = false;

@@ -101,35 +101,33 @@ public class ProductServiceTests
             CategoryId = 1,
             StockQuantity = 100
         };
-        var createdProduct = new Product { Id = 1, Name = request.Name, CategoryId = request.CategoryId };
-        var expectedResponse = new ProductResponse
+        var category = new Category { Id = 1, Name = "Electronics", IsActive = true };
+        var createdProduct = new Product
         {
             Id = 1,
             Name = request.Name,
             Description = request.Description,
             Price = request.Price,
             CategoryId = request.CategoryId,
-            CategoryName = "Electronics",
-            StockQuantity = request.StockQuantity
+            StockQuantity = request.StockQuantity,
+            CreatedDate = DateTime.UtcNow,
+            IsActive = true
         };
 
         _categoryRepositoryMock
-            .Setup(r => r.ExistsAsync(request.CategoryId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
+            .Setup(r => r.GetByIdAsync(request.CategoryId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(category);
         _productRepositoryMock
             .Setup(r => r.AddAsync(It.IsAny<Product>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(createdProduct);
-        _productRepositoryMock
-            .Setup(r => r.GetByIdAsync(createdProduct.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(expectedResponse);
 
         var result = await _productService.CreateAsync(request);
 
         Assert.Multiple(() =>
         {
-            Assert.That(result.Id, Is.EqualTo(expectedResponse.Id));
-            Assert.That(result.Name, Is.EqualTo(expectedResponse.Name));
-            Assert.That(result.CategoryName, Is.EqualTo(expectedResponse.CategoryName));
+            Assert.That(result.Id, Is.EqualTo(createdProduct.Id));
+            Assert.That(result.Name, Is.EqualTo(createdProduct.Name));
+            Assert.That(result.CategoryName, Is.EqualTo(category.Name));
         });
     }
 
@@ -144,8 +142,8 @@ public class ProductServiceTests
             StockQuantity = 100
         };
         _categoryRepositoryMock
-            .Setup(r => r.ExistsAsync(999, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .Setup(r => r.GetByIdAsync(999, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Category?)null);
 
         var exception = Assert.ThrowsAsync<InvalidOperationException>(
             async () => await _productService.CreateAsync(request));
@@ -187,6 +185,9 @@ public class ProductServiceTests
         _productRepositoryMock
             .Setup(r => r.GetEntityByIdAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync(existingProduct);
+        _categoryRepositoryMock
+            .Setup(r => r.ExistsAsync(request.CategoryId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         _productRepositoryMock
             .Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedResponse);

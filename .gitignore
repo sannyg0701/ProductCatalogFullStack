@@ -407,6 +407,9 @@ changelogs/liquibase.properties
 appsettings.Development.json
 .claude
 
+# Docker environment file (contains passwords)
+.env
+
 # Angular specific (for product-catalog-ui)
 dist/
 tmp/

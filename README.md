@@ -14,6 +14,9 @@ A full-stack product catalog application built with C# .NET 8 Web API and Angula
 ### Option 1: Run with Docker Compose (Recommended)
 
 ```bash
+# Copy environment file (required - contains SQL Server password)
+cp .env.example .env
+
 # Start all services (SQL Server, API, Frontend)
 docker-compose up -d
 
@@ -26,25 +29,33 @@ docker-compose up -d
 
 **1. Start SQL Server:**
 ```bash
-docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=YourStrong!Passw0rd" \
+# Replace <YourPassword> with a strong password (8+ chars, upper/lower/digit/symbol)
+docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=<YourPassword>" \
   -p 1433:1433 --name productcatalog-sqlserver \
-  -d mcr.microsoft.com/mssql/server:2022-latest
+  -d mcr.microsoft.com/mssql/server:2022-CU15-ubuntu-22.04
 ```
 
-**2. Run the API:**
+**2. Configure the API:**
 ```bash
 cd ProductCatalog/src/ProductCatalog.Api
+
+# Copy the example config (or set ConnectionStrings__DefaultConnection env var)
+cp appsettings.Development.json.example appsettings.Development.json
+```
+
+**3. Run the API:**
+```bash
 dotnet run --urls "http://localhost:5000"
 ```
 
-**3. Run the Frontend:**
+**4. Run the Frontend:**
 ```bash
 cd ProductCatalogUI
 npm install
 ng serve
 ```
 
-**4. Access the application:**
+**5. Access the application:**
 - Frontend: http://localhost:4200
 - API Swagger: http://localhost:5000/swagger/index.html
 
@@ -58,29 +69,30 @@ The solution follows **Clean Architecture** principles with clear separation of 
 
 ```
 ProductCatalog/
-├── src/
-│   ├── ProductCatalog.Api/           # Presentation Layer
-│   │   ├── Controllers/              # Thin controllers, HTTP concerns only
-│   │   └── Middleware/               # Cross-cutting concerns (exception handling)
-│   │
-│   ├── ProductCatalog.Core/          # Domain Layer (innermost)
-│   │   ├── Entities/                 # Domain models
-│   │   ├── DTOs/                     # Data transfer objects
-│   │   └── Interfaces/               # Abstractions (repositories, services)
-│   │
-│   └── ProductCatalog.Infrastructure/  # Infrastructure Layer
-│       ├── Data/                     # EF Core DbContext, configurations, migrations
-│       ├── Repositories/             # Data access implementations
-│       └── Services/                 # Business logic implementations
-│
-└── tests/
-    └── ProductCatalog.Tests/         # Unit tests
+|-- src/
+|   |-- ProductCatalog.Api/              # Presentation Layer
+|   |   |-- Controllers/                 # Thin controllers, HTTP concerns only
+|   |   +-- Middleware/                  # Cross-cutting concerns (exception handling)
+|   |
+|   |-- ProductCatalog.Core/             # Domain Layer (innermost)
+|   |   |-- Entities/                    # Domain models
+|   |   |-- DTOs/                        # Data transfer objects
+|   |   +-- Interfaces/                  # Abstractions (repositories, services)
+|   |
+|   +-- ProductCatalog.Infrastructure/   # Infrastructure Layer
+|       |-- Data/                        # EF Core DbContext, configurations, migrations
+|       |-- Repositories/                # Data access implementations
+|       +-- Services/                    # Business logic implementations
+|
++-- tests/
+    |-- ProductCatalog.Tests/            # Unit tests (Moq)
+    +-- ProductCatalog.Tests.Integration/# Integration tests (Testcontainers)
 
-ProductCatalogUI/                     # Angular 18 Frontend
-├── src/app/
-│   ├── components/                   # UI components
-│   ├── services/                     # HTTP services
-│   └── models/                       # TypeScript interfaces
+ProductCatalogUI/                        # Angular 18 Frontend
+|-- src/app/
+    |-- components/                      # UI components
+    |-- services/                        # HTTP services
+    +-- models/                          # TypeScript interfaces
 ```
 
 **Dependency Flow:** Api -> Core <- Infrastructure
@@ -90,18 +102,18 @@ The Core layer has no dependencies on external frameworks, making it highly test
 ### Database Schema
 
 ```
-┌─────────────────────────────────────┐       ┌─────────────────────────────┐
-│            Products                 │       │         Categories          │
-├─────────────────────────────────────┤       ├─────────────────────────────┤
-│ Id           INT (PK, Identity)     │       │ Id          INT (PK)        │
-│ Name         NVARCHAR(200) NOT NULL │       │ Name        NVARCHAR(100)   │
-│ Description  NVARCHAR(2000) NULL    │       │ Description NVARCHAR(500)   │
-│ Price        DECIMAL(18,2) NOT NULL │       │ IsActive    BIT             │
-│ CategoryId   INT (FK) NOT NULL      │───────│                             │
-│ StockQuantity INT NOT NULL          │       └─────────────────────────────┘
-│ CreatedDate  DATETIME2 NOT NULL     │
-│ IsActive     BIT NOT NULL           │
-└─────────────────────────────────────┘
++-------------------------------------+       +-----------------------------+
+|            Products                 |       |         Categories          |
++-------------------------------------+       +-----------------------------+
+| Id           INT (PK, Identity)     |       | Id          INT (PK)        |
+| Name         NVARCHAR(200) NOT NULL |       | Name        NVARCHAR(100)   |
+| Description  NVARCHAR(2000) NULL    |       | Description NVARCHAR(500)   |
+| Price        DECIMAL(18,2) NOT NULL |       | IsActive    BIT             |
+| CategoryId   INT (FK) NOT NULL      |------>|                             |
+| StockQuantity INT NOT NULL          |       +-----------------------------+
+| CreatedDate  DATETIME2 NOT NULL     |
+| IsActive     BIT NOT NULL           |
++-------------------------------------+
 
 Indexes:
 - IX_Products_CategoryId        (CategoryId)           - FK lookups, category filtering
@@ -178,14 +190,7 @@ return await _context.Products
 })
 ```
 
-3. **Efficient pagination** with Skip/Take after filtering:
-```csharp
-var totalCount = await query.CountAsync(cancellationToken);  // Count before pagination
-var items = await query
-    .Skip((request.PageNumber - 1) * request.PageSize)
-    .Take(request.PageSize)
-    .ToListAsync(cancellationToken);
-```
+3. **Single-query search with raw SQL** - see next section for details on the CTE-based implementation.
 
 4. **ConfigureAwait(false)** throughout service/repository layer for better performance in library code.
 
@@ -196,17 +201,17 @@ var items = await query
 **Implementation highlights:**
 
 - **All parameters optional and combinable** - builds query dynamically
-- **Case-insensitive search** with AND logic for multiple terms:
+- **True single-query implementation** using raw SQL with CTEs:
+  - EF Core LINQ cannot express the CTE/UNION-based single-query pagination + count we need, so raw SQL is required
+  - Uses CTEs (Common Table Expressions) to compute TotalCount and paginated results in one round-trip
+  - UNION ALL ensures TotalCount is returned even when the requested page is empty
+- **Case-insensitive search** via SQL Server collation (no `ToLower()` needed, which would be non-sargable):
 ```csharp
-var searchTerms = request.SearchTerm.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-foreach (var term in searchTerms)
-{
-    query = query.Where(p =>
-        p.Name.ToLower().Contains(term.ToLower()) ||
-        p.Description.ToLower().Contains(term.ToLower()));
-}
+// Search terms use LIKE with proper escaping for special characters
+whereConditions.Add($"(p.Name LIKE {paramName} ESCAPE '\\' OR p.Description LIKE {paramName} ESCAPE '\\')");
 ```
-- **Single efficient query** - filtering, sorting, and pagination in one database round-trip
+- **LIKE escaping** - Special characters (`%`, `_`, `[`, `\`) are escaped so they match literally
+- **Stable pagination** - Secondary sort by `Id ASC` ensures consistent ordering
 - **Strongly-typed response** with pagination metadata:
 ```json
 {
@@ -291,7 +296,7 @@ Task<ProductResponse?> GetByIdAsync(int id, CancellationToken cancellationToken)
 1. **Specification Pattern** - Extract query logic into reusable specifications
 2. **Result Pattern** - Replace exceptions with Result<T> for expected failures
 3. **MediatR/CQRS** - Separate read and write models for complex scenarios
-4. **Integration Tests** - Add tests with TestContainers for database scenarios
+4. **API Integration Tests** - Add WebApplicationFactory tests for full endpoint coverage
 
 ### Production Considerations
 
@@ -314,7 +319,7 @@ Task<ProductResponse?> GetByIdAsync(int id, CancellationToken cancellationToken)
 
 4. **Deployment**
    - CI/CD pipeline (GitHub Actions)
-   - Kubernetes manifests (included in `/k8s`)
+   - Kubernetes manifests for container orchestration
    - Environment-specific configuration
    - Database migration strategy
 
@@ -335,7 +340,8 @@ Task<ProductResponse?> GetByIdAsync(int id, CancellationToken cancellationToken)
 | Decision | Trade-off | Rationale |
 |----------|-----------|-----------|
 | Repository pattern | More abstraction vs. simplicity | Chose testability and separation of concerns |
-| Sync DB migrations on startup | Startup delay vs. manual migration | Simpler development experience; would change for production |
+| Seed data in Development only | Manual seeding for other envs vs. accidental data | Avoids startup failures and lock contention in production |
+| Raw SQL for search | EF abstraction vs. single-query requirement | EF Core cannot express window functions; raw SQL meets the requirement |
 | DTOs in Core layer | Slight coupling vs. separate contracts project | Pragmatic choice for project size |
 | No caching | Simplicity vs. performance | Out of scope; would add Redis for production |
 | SQL Server | Heavier than SQLite vs. production parity | Matches likely production environment |
@@ -379,33 +385,51 @@ Task<ProductResponse?> GetByIdAsync(int id, CancellationToken cancellationToken)
 
 ```
 ProductCatalogFullStack/
-├── ProductCatalog/                 # Backend solution
-│   ├── src/
-│   │   ├── ProductCatalog.Api/
-│   │   ├── ProductCatalog.Core/
-│   │   └── ProductCatalog.Infrastructure/
-│   ├── tests/
-│   │   └── ProductCatalog.Tests/
-│   └── k8s/                        # Kubernetes manifests
-├── ProductCatalogUI/               # Angular frontend
-├── docker-compose.yml              # Full stack orchestration
-└── README.md
+|-- ProductCatalog/                      # Backend solution
+|   |-- src/
+|   |   |-- ProductCatalog.Api/
+|   |   |-- ProductCatalog.Core/
+|   |   +-- ProductCatalog.Infrastructure/
+|   +-- tests/
+|       |-- ProductCatalog.Tests/             # Unit tests
+|       +-- ProductCatalog.Tests.Integration/ # Integration tests (Testcontainers)
+|-- ProductCatalogUI/                    # Angular frontend
+|-- docker-compose.yml                   # Full stack orchestration
++-- README.md
 ```
 
 ---
 
 ## Testing
 
-### Run Backend Tests
+### Run All Tests
 ```bash
-cd ProductCatalog/tests/ProductCatalog.Tests
+cd ProductCatalog
 dotnet test
 ```
 
+### Run Unit Tests Only
+```bash
+dotnet test tests/ProductCatalog.Tests
+```
+
+### Run Integration Tests Only
+```bash
+# Requires Docker Desktop running
+dotnet test tests/ProductCatalog.Tests.Integration
+```
+
 ### Test Coverage
-- Unit tests for services (business logic)
-- Unit tests for controllers (HTTP behavior)
+
+**Unit Tests (29 tests):**
+- Services (business logic validation, orchestration)
+- Controllers (HTTP status codes, model binding)
 - Mocking with Moq for dependencies
+
+**Integration Tests (11 tests):**
+- Raw SQL search implementation against real SQL Server
+- Uses Testcontainers to spin up SQL Server 2022 in Docker
+- Covers: pagination, sorting, filtering, LIKE escaping, empty page TotalCount
 
 ---
 

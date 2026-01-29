@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using ProductCatalog.Api.Middleware;
@@ -34,7 +35,37 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 
 // Controllers
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // Return ProblemDetails instead of ValidationProblemDetails for model validation errors
+        // This ensures consistent 400 response shape across all error types
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var problemDetails = new ProblemDetails
+            {
+                Title = "Validation failed",
+                Status = StatusCodes.Status400BadRequest,
+                Detail = "One or more validation errors occurred.",
+                Instance = context.HttpContext.Request.Path
+            };
+
+            // Preserve field-level errors in Extensions
+            var errors = context.ModelState
+                .Where(e => e.Value?.Errors.Count > 0)
+                .ToDictionary(
+                    kvp => kvp.Key,
+                    kvp => kvp.Value!.Errors.Select(e => e.ErrorMessage).ToArray()
+                );
+
+            if (errors.Count > 0)
+            {
+                problemDetails.Extensions["errors"] = errors;
+            }
+
+            return new BadRequestObjectResult(problemDetails);
+        };
+    });
 
 // CORS - Allow Angular dev server
 builder.Services.AddCors(options =>

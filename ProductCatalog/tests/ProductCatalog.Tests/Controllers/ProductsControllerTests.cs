@@ -77,7 +77,16 @@ public class ProductsControllerTests
 
         var result = await _controller.GetById(999, CancellationToken.None);
 
-        Assert.That(result.Result, Is.TypeOf<NotFoundResult>());
+        var notFoundResult = result.Result as NotFoundObjectResult;
+        Assert.Multiple(() =>
+        {
+            Assert.That(notFoundResult, Is.Not.Null);
+            Assert.That(notFoundResult!.StatusCode, Is.EqualTo(StatusCodes.Status404NotFound));
+            var problemDetails = notFoundResult.Value as ProblemDetails;
+            Assert.That(problemDetails, Is.Not.Null);
+            Assert.That(problemDetails!.Title, Is.EqualTo("Product not found"));
+            Assert.That(problemDetails.Status, Is.EqualTo(StatusCodes.Status404NotFound));
+        });
     }
 
     [Test]
@@ -209,7 +218,16 @@ public class ProductsControllerTests
 
         var result = await _controller.Update(999, request, CancellationToken.None);
 
-        Assert.That(result.Result, Is.TypeOf<NotFoundResult>());
+        var notFoundResult = result.Result as NotFoundObjectResult;
+        Assert.Multiple(() =>
+        {
+            Assert.That(notFoundResult, Is.Not.Null);
+            Assert.That(notFoundResult!.StatusCode, Is.EqualTo(StatusCodes.Status404NotFound));
+            var problemDetails = notFoundResult.Value as ProblemDetails;
+            Assert.That(problemDetails, Is.Not.Null);
+            Assert.That(problemDetails!.Title, Is.EqualTo("Product not found"));
+            Assert.That(problemDetails.Status, Is.EqualTo(StatusCodes.Status404NotFound));
+        });
     }
 
     [Test]
@@ -253,7 +271,16 @@ public class ProductsControllerTests
 
         var result = await _controller.Delete(999, CancellationToken.None);
 
-        Assert.That(result, Is.TypeOf<NotFoundResult>());
+        var notFoundResult = result as NotFoundObjectResult;
+        Assert.Multiple(() =>
+        {
+            Assert.That(notFoundResult, Is.Not.Null);
+            Assert.That(notFoundResult!.StatusCode, Is.EqualTo(StatusCodes.Status404NotFound));
+            var problemDetails = notFoundResult.Value as ProblemDetails;
+            Assert.That(problemDetails, Is.Not.Null);
+            Assert.That(problemDetails!.Title, Is.EqualTo("Product not found"));
+            Assert.That(problemDetails.Status, Is.EqualTo(StatusCodes.Status404NotFound));
+        });
     }
 
 }

@@ -39,7 +39,7 @@ public class CategoriesController : ControllerBase
     /// </summary>
     [HttpPost]
     [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<CategoryResponse>> Create(
         [FromBody] CreateCategoryRequest request,
         CancellationToken cancellationToken)

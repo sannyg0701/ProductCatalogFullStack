@@ -82,7 +82,7 @@ public class ProductRepository : IProductRepository
         var parameters = new List<SqlParameter>();
         var whereConditions = new List<string> { "p.IsActive = 1" };
 
-        // Search term filter (SQL Server collation is case-insensitive)
+        // Search term filter (case-insensitive using SQL LOWER for consistent locale handling)
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
         {
             var terms = request.SearchTerm.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -91,7 +91,7 @@ public class ProductRepository : IProductRepository
                 var paramName = $"@searchTerm{i}";
                 var escapedTerm = EscapeLikeTerm(terms[i]);
                 parameters.Add(new SqlParameter(paramName, $"%{escapedTerm}%"));
-                whereConditions.Add($"(p.Name LIKE {paramName} ESCAPE '\\' OR p.Description LIKE {paramName} ESCAPE '\\')");
+                whereConditions.Add($"(LOWER(p.Name) LIKE LOWER({paramName}) ESCAPE '\\' OR LOWER(p.Description) LIKE LOWER({paramName}) ESCAPE '\\')");
             }
         }
 

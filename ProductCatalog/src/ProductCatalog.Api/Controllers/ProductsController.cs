@@ -39,7 +39,7 @@ public class ProductsController : ControllerBase
     /// </summary>
     [HttpGet("{id:int}")]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProductResponse>> GetById(int id, CancellationToken cancellationToken)
     {
         _logger.LogDebug("Getting product with id {productId}.", id);
@@ -48,7 +48,12 @@ public class ProductsController : ControllerBase
         if (product is null)
         {
             _logger.LogDebug("Product with id {productId} not found.", id);
-            return NotFound();
+            return NotFound(new ProblemDetails
+            {
+                Title = "Product not found",
+                Detail = $"Product with ID {id} was not found.",
+                Status = StatusCodes.Status404NotFound
+            });
         }
 
         return Ok(product);
@@ -59,6 +64,7 @@ public class ProductsController : ControllerBase
     /// </summary>
     [HttpGet("search")]
     [ProducesResponseType(typeof(PagedResult<ProductResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PagedResult<ProductResponse>>> Search(
         [FromQuery] ProductSearchRequest request,
         CancellationToken cancellationToken)
@@ -73,7 +79,7 @@ public class ProductsController : ControllerBase
     /// </summary>
     [HttpPost]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<ProductResponse>> Create(
         [FromBody] CreateProductRequest request,
         CancellationToken cancellationToken)
@@ -102,8 +108,8 @@ public class ProductsController : ControllerBase
     /// </summary>
     [HttpPut("{id:int}")]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<ProductResponse>> Update(
         int id,
         [FromBody] UpdateProductRequest request,
@@ -118,7 +124,12 @@ public class ProductsController : ControllerBase
             if (product is null)
             {
                 _logger.LogDebug("Product with id {productId} not found for update.", id);
-                return NotFound();
+                return NotFound(new ProblemDetails
+                {
+                    Title = "Product not found",
+                    Detail = $"Product with ID {id} was not found.",
+                    Status = StatusCodes.Status404NotFound
+                });
             }
 
             return Ok(product);
@@ -140,7 +151,7 @@ public class ProductsController : ControllerBase
     /// </summary>
     [HttpDelete("{id:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
         _logger.LogDebug("Deleting product with id {productId}.", id);
@@ -149,7 +160,12 @@ public class ProductsController : ControllerBase
         if (!deleted)
         {
             _logger.LogDebug("Product with id {productId} not found for deletion.", id);
-            return NotFound();
+            return NotFound(new ProblemDetails
+            {
+                Title = "Product not found",
+                Detail = $"Product with ID {id} was not found.",
+                Status = StatusCodes.Status404NotFound
+            });
         }
 
         return NoContent();

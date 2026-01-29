@@ -38,7 +38,7 @@ public class GlobalExceptionHandlerMiddleware
         context.Response.ContentType = "application/problem+json";
         context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
 
-        var problemDetails = new ProblemDetails
+        ProblemDetails problemDetails = new()
         {
             Status = context.Response.StatusCode,
             Title = "An error occurred while processing your request.",

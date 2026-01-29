@@ -8,7 +8,7 @@ using ProductCatalog.Infrastructure.Data;
 using ProductCatalog.Infrastructure.Repositories;
 using ProductCatalog.Infrastructure.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 
@@ -41,7 +41,7 @@ builder.Services.AddControllers()
         // Return ProblemDetails for all validation errors
         options.InvalidModelStateResponseFactory = context =>
         {
-            var problemDetails = new ProblemDetails
+            ProblemDetails problemDetails = new ProblemDetails
             {
                 Title = "Validation failed",
                 Status = StatusCodes.Status400BadRequest,
@@ -49,7 +49,7 @@ builder.Services.AddControllers()
                 Instance = context.HttpContext.Request.Path
             };
 
-            var errors = context.ModelState
+            Dictionary<string, string[]> errors = context.ModelState
                 .Where(e => e.Value?.Errors.Count > 0)
                 .ToDictionary(
                     kvp => kvp.Key,
@@ -92,14 +92,14 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>("database");
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
 // Seed database (Development only to avoid startup issues in production)
 if (app.Environment.IsDevelopment())
 {
-    using var scope = app.Services.CreateScope();
-    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    using IServiceScope scope = app.Services.CreateScope();
+    ApplicationDbContext context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    ILogger<Program> logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
     await SeedData.InitializeAsync(context, logger);
 }
@@ -133,4 +133,4 @@ app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.Health
 app.Run();
 
 // Make Program class accessible for integration tests
-public partial class Program { }
+public partial class Program;

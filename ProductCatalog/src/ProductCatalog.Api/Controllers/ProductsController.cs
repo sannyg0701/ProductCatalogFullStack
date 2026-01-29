@@ -30,7 +30,7 @@ public class ProductsController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<ProductResponse>>> GetAll(CancellationToken cancellationToken)
     {
         _logger.LogDebug("Getting all active products.");
-        var products = await _productService.GetAllActiveAsync(cancellationToken);
+        IReadOnlyList<ProductResponse> products = await _productService.GetAllActiveAsync(cancellationToken);
         return Ok(products);
     }
 
@@ -43,7 +43,7 @@ public class ProductsController : ControllerBase
     public async Task<ActionResult<ProductResponse>> GetById(int id, CancellationToken cancellationToken)
     {
         _logger.LogDebug("Getting product with id {productId}.", id);
-        var product = await _productService.GetByIdAsync(id, cancellationToken);
+        ProductResponse? product = await _productService.GetByIdAsync(id, cancellationToken);
 
         if (product is null)
         {
@@ -70,7 +70,7 @@ public class ProductsController : ControllerBase
         CancellationToken cancellationToken)
     {
         _logger.LogDebug("Searching products with term {searchTerm}.", request.SearchTerm);
-        var result = await _productService.SearchAsync(request, cancellationToken);
+        PagedResult<ProductResponse> result = await _productService.SearchAsync(request, cancellationToken);
         return Ok(result);
     }
 
@@ -88,7 +88,7 @@ public class ProductsController : ControllerBase
 
         try
         {
-            var product = await _productService.CreateAsync(request, cancellationToken);
+            ProductResponse product = await _productService.CreateAsync(request, cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = product.Id }, product);
         }
         catch (InvalidOperationException ex)
@@ -119,7 +119,7 @@ public class ProductsController : ControllerBase
 
         try
         {
-            var product = await _productService.UpdateAsync(id, request, cancellationToken);
+            ProductResponse? product = await _productService.UpdateAsync(id, request, cancellationToken);
 
             if (product is null)
             {
@@ -155,7 +155,7 @@ public class ProductsController : ControllerBase
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
         _logger.LogDebug("Deleting product with id {productId}.", id);
-        var deleted = await _productService.DeleteAsync(id, cancellationToken);
+        bool deleted = await _productService.DeleteAsync(id, cancellationToken);
 
         if (!deleted)
         {

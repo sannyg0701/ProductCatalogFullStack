@@ -26,7 +26,7 @@ public class CategoryService : ICategoryService
     {
         _logger.LogDebug("Retrieving all active categories.");
 
-        var categories = await _categoryRepository.GetAllActiveAsync(cancellationToken).ConfigureAwait(false);
+        var categories = await _categoryRepository.GetAllActiveAsync(cancellationToken);
 
         return categories.Select(c => new CategoryResponse
         {
@@ -50,7 +50,7 @@ public class CategoryService : ICategoryService
             IsActive = true
         };
 
-        var createdCategory = await _categoryRepository.AddAsync(category, cancellationToken).ConfigureAwait(false);
+        var createdCategory = await _categoryRepository.AddAsync(category, cancellationToken);
         _logger.LogDebug("Created category with id {categoryId}.", createdCategory.Id);
 
         return new CategoryResponse

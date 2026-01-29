@@ -30,7 +30,7 @@ public class CategoriesController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<CategoryResponse>>> GetAll(CancellationToken cancellationToken)
     {
         _logger.LogDebug("Getting all active categories.");
-        var categories = await _categoryService.GetAllActiveAsync(cancellationToken);
+        IReadOnlyList<CategoryResponse> categories = await _categoryService.GetAllActiveAsync(cancellationToken);
         return Ok(categories);
     }
 
@@ -45,7 +45,7 @@ public class CategoriesController : ControllerBase
         CancellationToken cancellationToken)
     {
         _logger.LogDebug("Creating category with name {categoryName}.", request.Name);
-        var category = await _categoryService.CreateAsync(request, cancellationToken);
+        CategoryResponse category = await _categoryService.CreateAsync(request, cancellationToken);
         return CreatedAtAction(nameof(GetAll), null, category);
     }
 }

@@ -29,13 +29,13 @@ public class ProductService : IProductService
     public async Task<IReadOnlyList<ProductResponse>> GetAllActiveAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Retrieving all active products.");
-        return await _productRepository.GetAllActiveAsync(cancellationToken).ConfigureAwait(false);
+        return await _productRepository.GetAllActiveAsync(cancellationToken);
     }
 
     public async Task<ProductResponse?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Retrieving product with id {productId}.", id);
-        return await _productRepository.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        return await _productRepository.GetByIdAsync(id, cancellationToken);
     }
 
     public async Task<PagedResult<ProductResponse>> SearchAsync(
@@ -44,7 +44,7 @@ public class ProductService : IProductService
     {
         ArgumentNullException.ThrowIfNull(request);
         _logger.LogDebug("Searching products with term {searchTerm}.", request.SearchTerm);
-        return await _productRepository.SearchAsync(request, cancellationToken).ConfigureAwait(false);
+        return await _productRepository.SearchAsync(request, cancellationToken);
     }
 
     public async Task<ProductResponse> CreateAsync(
@@ -55,7 +55,7 @@ public class ProductService : IProductService
 
         // Fetch category (validates existence, active status, and gets name for response)
         var category = await _categoryRepository.GetByIdAsync(request.CategoryId, cancellationToken)
-            .ConfigureAwait(false);
+            ;
 
         if (category is null || !category.IsActive)
         {
@@ -74,7 +74,7 @@ public class ProductService : IProductService
             IsActive = true
         };
 
-        var createdProduct = await _productRepository.AddAsync(product, cancellationToken).ConfigureAwait(false);
+        var createdProduct = await _productRepository.AddAsync(product, cancellationToken);
         _logger.LogDebug("Created product with id {productId}.", createdProduct.Id);
 
         // Build response directly (avoids re-fetch and null-forgiving operator)
@@ -99,7 +99,7 @@ public class ProductService : IProductService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var product = await _productRepository.GetEntityByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        var product = await _productRepository.GetEntityByIdAsync(id, cancellationToken);
 
         if (product is null)
         {
@@ -109,7 +109,7 @@ public class ProductService : IProductService
 
         // Validate category exists and is active (ExistsAsync filters by IsActive)
         var categoryExists = await _categoryRepository.ExistsAsync(request.CategoryId, cancellationToken)
-            .ConfigureAwait(false);
+            ;
 
         if (!categoryExists)
         {
@@ -123,16 +123,16 @@ public class ProductService : IProductService
         product.CategoryId = request.CategoryId;
         product.StockQuantity = request.StockQuantity;
 
-        await _productRepository.UpdateAsync(product, cancellationToken).ConfigureAwait(false);
+        await _productRepository.UpdateAsync(product, cancellationToken);
         _logger.LogDebug("Updated product with id {productId}.", id);
 
         // Fetch the full response with category name
-        return await _productRepository.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        return await _productRepository.GetByIdAsync(id, cancellationToken);
     }
 
     public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default)
     {
-        var product = await _productRepository.GetEntityByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        var product = await _productRepository.GetEntityByIdAsync(id, cancellationToken);
 
         if (product is null)
         {
@@ -142,7 +142,7 @@ public class ProductService : IProductService
 
         // Soft delete
         product.IsActive = false;
-        await _productRepository.UpdateAsync(product, cancellationToken).ConfigureAwait(false);
+        await _productRepository.UpdateAsync(product, cancellationToken);
         _logger.LogDebug("Soft-deleted product with id {productId}.", id);
 
         return true;

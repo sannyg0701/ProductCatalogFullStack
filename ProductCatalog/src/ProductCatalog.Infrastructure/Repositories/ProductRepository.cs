@@ -37,7 +37,7 @@ public class ProductRepository : IProductRepository
             })
             .AsNoTracking()
             .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+            ;
     }
 
     public async Task<ProductResponse?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
@@ -58,14 +58,14 @@ public class ProductRepository : IProductRepository
             })
             .AsNoTracking()
             .FirstOrDefaultAsync(cancellationToken)
-            .ConfigureAwait(false);
+            ;
     }
 
     public async Task<Product?> GetEntityByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _context.Products
             .FirstOrDefaultAsync(p => p.Id == id && p.IsActive, cancellationToken)
-            .ConfigureAwait(false);
+            ;
     }
 
     /// <summary>
@@ -176,7 +176,7 @@ public class ProductRepository : IProductRepository
         var results = await _context.Database
             .SqlQueryRaw<SearchResultRow>(sql, parameters.ToArray())
             .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+            ;
 
         // TotalCount comes from any row (data rows or count-only row)
         var totalCount = results.FirstOrDefault()?.TotalCount ?? 0;
@@ -239,7 +239,7 @@ public class ProductRepository : IProductRepository
         ArgumentNullException.ThrowIfNull(product);
 
         _context.Products.Add(product);
-        await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await _context.SaveChangesAsync(cancellationToken);
 
         return product;
     }
@@ -249,14 +249,14 @@ public class ProductRepository : IProductRepository
         ArgumentNullException.ThrowIfNull(product);
 
         _context.Products.Update(product);
-        await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _context.Products
             .AnyAsync(p => p.Id == id && p.IsActive, cancellationToken)
-            .ConfigureAwait(false);
+            ;
     }
 
 }

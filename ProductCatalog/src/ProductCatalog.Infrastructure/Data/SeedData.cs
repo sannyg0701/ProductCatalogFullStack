@@ -12,10 +12,10 @@ public static class SeedData
         ArgumentNullException.ThrowIfNull(logger);
 
         // Ensure database is created and migrations are applied
-        await context.Database.MigrateAsync().ConfigureAwait(false);
+        await context.Database.MigrateAsync();
 
         // Check if data already exists
-        if (await context.Categories.AnyAsync().ConfigureAwait(false))
+        if (await context.Categories.AnyAsync())
         {
             logger.LogInformation("Database already seeded.");
             return;
@@ -24,12 +24,12 @@ public static class SeedData
         logger.LogInformation("Seeding database.");
 
         var categories = GetCategories();
-        await context.Categories.AddRangeAsync(categories).ConfigureAwait(false);
-        await context.SaveChangesAsync().ConfigureAwait(false);
+        await context.Categories.AddRangeAsync(categories);
+        await context.SaveChangesAsync();
 
         var products = GetProducts(categories);
-        await context.Products.AddRangeAsync(products).ConfigureAwait(false);
-        await context.SaveChangesAsync().ConfigureAwait(false);
+        await context.Products.AddRangeAsync(products);
+        await context.SaveChangesAsync();
 
         logger.LogInformation("Database seeded with {categoryCount} categories and {productCount} products.",
             categories.Count, products.Count);

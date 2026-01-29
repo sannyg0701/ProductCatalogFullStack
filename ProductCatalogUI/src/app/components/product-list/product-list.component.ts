@@ -157,6 +157,11 @@ export class ProductListComponent implements OnInit, OnDestroy {
         this.totalCount = result.totalCount;
         this.totalPages = result.totalPages;
         this.isLoading = false;
+
+        if (this.pageNumber > this.totalPages && this.totalPages > 0) {
+          this.pageNumber = this.totalPages;
+          this.search();
+        }
       },
       error: (err) => {
         this.errorMessage = 'Failed to load products. Please ensure the API is running.';
@@ -193,7 +198,7 @@ export class ProductListComponent implements OnInit, OnDestroy {
 
   getSortIndicator(column: string): string {
     if (this.sortBy !== column) return '';
-    return this.sortOrder === 'asc' ? ' ▲' : ' ▼';
+    return this.sortOrder === 'asc' ? ' ^' : ' v';
   }
 
   goToPage(page: number): void {
@@ -209,8 +214,7 @@ export class ProductListComponent implements OnInit, OnDestroy {
 
     this.productService.deleteProduct(product.id).subscribe({
       next: () => {
-        this.products = this.products.filter(p => p.id !== product.id);
-        this.totalCount--;
+        this.search();
       },
       error: (err) => {
         this.errorMessage = 'Failed to delete product.';

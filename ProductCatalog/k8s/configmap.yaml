@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: productcatalog-config
-  namespace: productcatalog
-data:
-  ASPNETCORE_ENVIRONMENT: "Production"

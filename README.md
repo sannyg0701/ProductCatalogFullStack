@@ -84,11 +84,11 @@ ng serve
 - Trade-off: extra abstraction layer.
 
 ### Index Strategy
-- IX_Products_CategoryId: category filtering / FK joins
-- IX_Products_IsActive: active-only filtering
-- IX_Products_Price: price range filtering
-- IX_Products_Name: default sort and search
-- IX_Products_CreatedDate: date sorting
+- IX_Product_CategoryId: category filtering / FK joins
+- IX_Product_IsActive: active-only filtering
+- IX_Product_Price: price range filtering
+- IX_Product_Name: default sort and search
+- IX_Product_CreatedDate: date sorting
 
 ## API Endpoints
 **Products**

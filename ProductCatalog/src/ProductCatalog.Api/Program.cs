@@ -104,7 +104,8 @@ if (app.Environment.IsDevelopment())
     await SeedData.InitializeAsync(context, logger);
 }
 
-// Configure the HTTP request pipeline
+// Configure a global exception handler first
+// to catch any errors that happen below
 app.UseGlobalExceptionHandler();
 
 if (app.Environment.IsDevelopment())

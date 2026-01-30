@@ -36,8 +36,7 @@ public class ProductRepository : IProductRepository
                 IsActive = p.IsActive
             })
             .AsNoTracking()
-            .ToListAsync(cancellationToken)
-            ;
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<ProductResponse?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
@@ -57,21 +56,18 @@ public class ProductRepository : IProductRepository
                 IsActive = p.IsActive
             })
             .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken)
-            ;
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<Product?> GetEntityByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _context.Products
-            .FirstOrDefaultAsync(p => p.Id == id && p.IsActive, cancellationToken)
-            ;
+            .FirstOrDefaultAsync(p => p.Id == id && p.IsActive, cancellationToken);
     }
 
     /// <summary>
-    /// Searches products using a single SQL query with CTEs and UNION ALL.
-    /// Returns correct TotalCount even when the requested page is empty (beyond last page).
-    /// This satisfies the "efficient single-query implementation" requirement.
+    /// Searches products using a single SQL query with CTE and COUNT(*) OVER() window function.
+    /// UNION ALL fallback ensures correct TotalCount even when page is empty (beyond last page).
     /// </summary>
     public async Task<PagedResult<ProductResponse>> SearchAsync(
         ProductSearchRequest request,
@@ -79,17 +75,17 @@ public class ProductRepository : IProductRepository
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var parameters = new List<SqlParameter>();
-        var whereConditions = new List<string> { "p.IsActive = 1" };
+        List<SqlParameter> parameters = [];
+        List<string> whereConditions = ["p.IsActive = 1"];
 
         // Case-insensitive search using SQL LOWER
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
         {
-            var terms = request.SearchTerm.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            for (var i = 0; i < terms.Length; i++)
+            string[] terms = request.SearchTerm.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < terms.Length; i++)
             {
-                var paramName = $"@searchTerm{i}";
-                var escapedTerm = EscapeLikeTerm(terms[i]);
+                string paramName = $"@searchTerm{i}";
+                string escapedTerm = EscapeLikeTerm(terms[i]);
                 parameters.Add(new SqlParameter(paramName, $"%{escapedTerm}%"));
                 whereConditions.Add($"(LOWER(p.Name) LIKE LOWER({paramName}) ESCAPE '\\' OR LOWER(p.Description) LIKE LOWER({paramName}) ESCAPE '\\')");
             }
@@ -122,8 +118,8 @@ public class ProductRepository : IProductRepository
         }
 
         // Build ORDER BY clause (whitelist approach to prevent SQL injection)
-        // Uses fp alias to match the PagedProducts CTE scope
-        var orderByClause = (request.SortBy?.ToLowerInvariant(), request.SortOrder?.ToLowerInvariant()) switch
+        // Uses fp alias to reference the Filtered CTE
+        string orderByClause = (request.SortBy?.ToLowerInvariant(), request.SortOrder?.ToLowerInvariant()) switch
         {
             ("price", "desc") => "fp.Price DESC, fp.Id ASC",
             ("price", _) => "fp.Price ASC, fp.Id ASC",
@@ -142,10 +138,10 @@ public class ProductRepository : IProductRepository
 
         var whereClause = string.Join(" AND ", whereConditions);
 
-        // Single query using CTEs to ensure TotalCount is correct even when page is empty.
-        // Uses UNION ALL with a count-only row (IsCountRow=1) when no data rows exist.
+        // Single query using CTE + window function for TotalCount.
+        // UNION ALL fallback handles empty page case (beyond last page).
         var sql = $@"
-            WITH FilteredProducts AS (
+            WITH Filtered AS (
                 SELECT
                     p.Id, p.Name, p.Description, p.Price, p.CategoryId,
                     c.Name AS CategoryName, p.StockQuantity, p.CreatedDate, p.IsActive
@@ -153,36 +149,32 @@ public class ProductRepository : IProductRepository
                 INNER JOIN Categories c ON p.CategoryId = c.Id
                 WHERE {whereClause}
             ),
-            TotalCount AS (
-                SELECT COUNT(*) AS Cnt FROM FilteredProducts
-            ),
-            PagedProducts AS (
+            Paged AS (
                 SELECT
                     fp.Id, fp.Name, fp.Description, fp.Price, fp.CategoryId, fp.CategoryName,
                     fp.StockQuantity, fp.CreatedDate, fp.IsActive,
-                    (SELECT Cnt FROM TotalCount) AS TotalCount,
+                    COUNT(*) OVER() AS TotalCount,
                     CAST(0 AS BIT) AS IsCountRow
-                FROM FilteredProducts fp
+                FROM Filtered fp
                 ORDER BY {orderByClause}
                 OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
             )
-            SELECT * FROM PagedProducts
+            SELECT * FROM Paged
             UNION ALL
             SELECT 0, '', NULL, 0, 0, '', 0, GETUTCDATE(), CAST(0 AS BIT),
-                   (SELECT Cnt FROM TotalCount), CAST(1 AS BIT)
-            WHERE (SELECT COUNT(*) FROM PagedProducts) = 0";
+                   (SELECT COUNT(*) FROM Filtered), CAST(1 AS BIT)
+            WHERE NOT EXISTS (SELECT 1 FROM Paged)";
 
         // Execute raw SQL and map to internal DTO
-        var results = await _context.Database
+        List<SearchResultRow> results = await _context.Database
             .SqlQueryRaw<SearchResultRow>(sql, parameters.ToArray())
-            .ToListAsync(cancellationToken)
-            ;
+            .ToListAsync(cancellationToken);
 
         // TotalCount comes from any row (data rows or count-only row)
-        var totalCount = results.FirstOrDefault()?.TotalCount ?? 0;
+        int totalCount = results.FirstOrDefault()?.TotalCount ?? 0;
 
         // Filter out the count-only row when building items
-        var items = results
+        List<ProductResponse> items = results
             .Where(r => !r.IsCountRow)
             .Select(r => new ProductResponse
             {

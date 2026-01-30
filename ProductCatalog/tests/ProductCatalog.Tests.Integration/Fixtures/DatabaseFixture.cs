@@ -16,7 +16,7 @@ public class DatabaseFixture
         // Generate password at runtime to avoid tripping secret scanners
         var password = $"Test@{Guid.NewGuid():N}";
 
-        _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-CU15-ubuntu-22.04")
+        _container = new MsSqlBuilder()
             .WithPassword(password)
             .Build();
 
